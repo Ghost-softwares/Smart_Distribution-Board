@@ -116,6 +116,18 @@ void setup() {
 }
 
 void loop() {
+       if (WiFi.status() == WL_CONNECTED) {
+        //if wifi is coonected 
+         digitalWrite(ledPinRed, HIGH); // Turn the LED on
+
+        }else{
+        delay(1000);
+        digitalWrite(ledPinRed, HIGH); // Turn the LED on
+        delay(1000);
+        digitalWrite(ledPinRed, LOW); // Turn the LED off
+        }
+
+
 
     if (user_password.length() == 0) {
         // User password is empty,
