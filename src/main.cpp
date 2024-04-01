@@ -4,11 +4,13 @@
 
 const char* ap_ssid = "SMARTDB";
 const char* ap_password = "SMARTDB1";
+const int switchPin = 2; //momentary is connected to GPIO 2
+const int ledPin = 17; // GPIO 17 pin connected to the LED
+const int ledPinRed = 4; // GPIO 4 pin connected to the LED
 
-const int switchPin = 2; // Assuming switch x is connected to GPIO 2
 
-const int ledPin = 4; // GPIO pin connected to the LED
-
+// Variable for storing the previous state of the switch
+int previousState = LOW;
 
 AsyncWebServer server(80);
 Preferences preferences;
@@ -64,21 +66,27 @@ void handleConnect(AsyncWebServerRequest *request);
 
 void setup() {
     Serial.begin(115200);
+    delay(1000); // Delay to allow time for serial monitor to initialize
 
     pinMode(ledPin, OUTPUT); // Set the LED pin as an output
-    
+    pinMode(ledPinRed, OUTPUT); // Set the LED pin as an output
+    pinMode(switchPin, INPUT_PULLUP); // Set the switch pin as an input with internal pull-up resistor
+    digitalWrite(ledPin, LOW); // Ensure the LED is initially off
+
     preferences.begin("my-app", false); // Open preferences with the given namespace
     
+      // Print saved user password
+    user_password = preferences.getString("user_password", "");
+    Serial.print("Saved user password: ");
+    Serial.println(user_password);
+
     // Check if the user password is empty
  user_password = preferences.getString("user_password", "");
     if (user_password.length() == 0) {
         // User password is empty, configure ESP32 as an Access Point
-        Serial.println("User password is empty. Configuring as Access Point...");
-        WiFi.softAP(ap_ssid, ap_password);
-        Serial.println("Access Point started");
+           WiFi.softAP(ap_ssid, ap_password);
     } else {
         // User password is not empty, connect to WiFi using saved credentials
-        Serial.println("User password is not empty. Connecting to WiFi...");
         String saved_ssid = preferences.getString("wifi_ssid", "");
         String saved_password = preferences.getString("wifi_password", "");
         WiFi.begin(saved_ssid.c_str(), saved_password.c_str());
@@ -91,11 +99,11 @@ void setup() {
             retries++;
         }
         if (WiFi.status() == WL_CONNECTED) {
-            Serial.println("\nConnected to WiFi");
+       
+            digitalWrite(ledPinRed, HIGH); // Turn the LED onto indicate wifi connected
         } else {
-            Serial.println("\nFailed to connect to WiFi. Switching to Access Point...");
             WiFi.softAP(ap_ssid, ap_password);
-            Serial.println("Access Point started");
+   
         }
     }
     
@@ -128,11 +136,31 @@ void loop() {
                 }
        
     } 
-    
-   
+
+//----momentary switch-------
+     int currentState = digitalRead(switchPin); // Read the current state of the switch
+  // Check if the switch state has changed
+    if (currentState != previousState) {
+        delay(50); // Debounce delay
+
+        // Check if the new state of the switch is pressed (LOW)
+        if (currentState == LOW) {
+            // Toggle the LED state
+                if (WiFi.status() == WL_CONNECTED) {
+                //if wifi is coonected do nothing
+                }else{
+                        // User password is empty, configure ESP32 as an Access Point
+                          WiFi.softAP(ap_ssid, ap_password);
+                        }
+        }
+    previousState = currentState; // Update the previous state for the next iteration
+    delay(100); // Add a small delay for stability
+    }
+//__________________________________
+
+
     
 
-    //delay(5000); // Check status every 5 second
 }
 
 void handleConnect(AsyncWebServerRequest *request) {
@@ -140,10 +168,16 @@ void handleConnect(AsyncWebServerRequest *request) {
     if (request->hasParam("ssid", true) && request->hasParam("password", true)) {
         String ssid = request->getParam("ssid", true)->value();
         String password = request->getParam("password", true)->value();
+         String user_password = request->getParam("user_password", true)->value();
         
         // Save WiFi credentials to preferences
         preferences.putString("wifi_ssid", ssid);
         preferences.putString("wifi_password", password);
+
+          // Save WiFi credentials to preferences
+        preferences.putString("user_password", user_password);
+
+      
 
         // Connect to WiFi
         Serial.println("Connecting to WiFi...");
