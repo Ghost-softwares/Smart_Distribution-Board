@@ -62,11 +62,48 @@ const char *htmlContent = R"(
 </html>
 )";
 
+
+
+
+
+
 void handleConnect(AsyncWebServerRequest *request);
+
+//delete data function
+void Deletedata() {
+    preferences.remove("wifi_ssid");
+    preferences.remove("wifi_password");
+    preferences.remove("user_password");
+     Serial.println("Data deleted.");
+}
+
+//blinking led function for pin 4
+void blinkLED(int pin) {
+    static unsigned long previousMillis = 0;
+    static bool ledState = LOW;
+    const unsigned long interval = 1000; // 1 second interval
+
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - previousMillis >= interval) {
+        // Save the last time the LED state was toggled
+        previousMillis = currentMillis;
+
+        // Toggle the LED state
+        ledState = !ledState;
+
+        // Set the LED to the new state
+        digitalWrite(pin, ledState);
+    }
+
+}
 
 void setup() {
     Serial.begin(115200);
-    delay(1000); // Delay to allow time for serial monitor to initialize
+    delay(100); // Delay to allow time for serial monitor to initialize
+
+    // Initialize unique identifier for this ESP32 device
+  String uniqueIdentifier = "GhostDB_Alpha";
 
     pinMode(ledPin, OUTPUT); // Set the LED pin as an output
     pinMode(ledPinRed, OUTPUT); // Set the LED pin as an output
@@ -74,6 +111,7 @@ void setup() {
     digitalWrite(ledPin, LOW); // Ensure the LED is initially off
 
     preferences.begin("my-app", false); // Open preferences with the given namespace
+    
     
       // Print saved user password
     user_password = preferences.getString("user_password", "");
@@ -108,15 +146,35 @@ void setup() {
     }
     
     // Initialize web server routes
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    // Check the User-Agent header to determine if the request is from a browser or your app
+    String userAgent = request->header("User-Agent");
+    if (userAgent.indexOf("Ghost-Switch") != -1) {
+        // Respond with plain text for requests from your Android app
+        request->send(200, "text/plain", "node");
+    } else {
+        // Respond with HTML for requests from web browsers
         request->send(200, "text/html", htmlContent);
-    });
+    }
+});
     server.on("/connect", HTTP_POST, handleConnect);
     server.begin();
 }
 
 void loop() {
+
+/*
+     // Print preferences
+    Serial.println("WiFi SSID: " + preferences.getString("wifi_ssid"));
+    Serial.println("WiFi Password: " + preferences.getString("wifi_password"));
+    Serial.println("User Password: " + preferences.getString("user_password"));
+*/
     
+   
+
+    //Deletedata(); //call deleted preference data
+    
+   
 
     if (user_password.length() == 0) {
         // User password is empty,
@@ -129,11 +187,8 @@ void loop() {
                         digitalWrite(ledPin, HIGH); // Turn the LED on
                 } 
                 else {
-                    delay(1000);
-                
-                    digitalWrite(ledPin, HIGH); // Turn the LED on
-                    delay(1000);
-                    digitalWrite(ledPin, LOW); // Turn the LED off
+                    blinkLED(ledPin);
+                   
                 }
        
     } else{
@@ -142,10 +197,8 @@ void loop() {
          digitalWrite(ledPinRed, HIGH); // Turn the LED on
 
         }else{
-        delay(1000);
-        digitalWrite(ledPinRed, HIGH); // Turn the LED on
-        delay(1000);
-        digitalWrite(ledPinRed, LOW); // Turn the LED off
+       blinkLED(ledPinRed);
+       
         }
     }
 
@@ -175,43 +228,46 @@ void loop() {
 
 }
 
+
 void handleConnect(AsyncWebServerRequest *request) {
-    // Retrieve form data
-    if (request->hasParam("ssid", true) && request->hasParam("password", true)) {
-        String ssid = request->getParam("ssid", true)->value();
-        String password = request->getParam("password", true)->value();
-         String user_password = request->getParam("user_password", true)->value();
-        
-        // Save WiFi credentials to preferences
-        preferences.putString("wifi_ssid", ssid);
-        preferences.putString("wifi_password", password);
+    if (request->method() == HTTP_POST) {
+        // Retrieve form data
+        if (request->hasParam("ssid", true) && request->hasParam("password", true)) {
+            String ssid = request->getParam("ssid", true)->value();
+            String password = request->getParam("password", true)->value();
+            String user_password = request->getParam("user_password", true)->value();
+            
+            // Save WiFi credentials to preferences
+            preferences.putString("wifi_ssid", ssid);
+            preferences.putString("wifi_password", password);
+            preferences.putString("user_password", user_password);
 
-          // Save WiFi credentials to preferences
-        preferences.putString("user_password", user_password);
+            // Connect to WiFi
+            Serial.println("Connecting to WiFi...");
+            WiFi.begin(ssid.c_str(), password.c_str());
 
-      
+            // Wait for connection
+            int attempts = 0;
+            while (WiFi.status() != WL_CONNECTED && attempts < 10) {
+                delay(500);
+                Serial.print(".");
+                attempts++;
+            }
 
-        // Connect to WiFi
-        Serial.println("Connecting to WiFi...");
-        WiFi.begin(ssid.c_str(), password.c_str());
-
-        // Wait for connection
-        int attempts = 0;
-        while (WiFi.status() != WL_CONNECTED && attempts < 10) {
-            delay(500);
-            Serial.print(".");
-            attempts++;
-        }
-
-        if (WiFi.status() == WL_CONNECTED) {
-            Serial.println("Connected to WiFi");
-            request->send(200, "text/plain", "Connected to WiFi");
+            if (WiFi.status() == WL_CONNECTED) {
+                Serial.println("Connected to WiFi");
+                request->send(200, "text/plain", "Connected to WiFi");
+            } else {
+                Serial.println("Failed to connect to WiFi");
+                request->send(500, "text/plain", "Failed to connect to WiFi");
+            }
         } else {
-            Serial.println("Failed to connect to WiFi");
-            request->send(500, "text/plain", "Failed to connect to WiFi");
+            request->send(400, "text/plain", "Invalid request parameters");
         }
     } else {
-        request->send(400, "text/plain", "Invalid request parameters");
+           Serial.println("Invalid HTTP method");
+        request->send(405, "text/plain", "Method Not Allowed");
     }
 }
+
 
