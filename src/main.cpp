@@ -4,17 +4,17 @@
 
 const char* ap_ssid = "SMARTDB";
 const char* ap_password = "SMARTDB1";
-const int switchPin = 2; //momentary is connected to GPIO 2
-const int ledPin = 17; // GPIO 17 pin connected to the LED
+const int switchPin = 5; //momentary is connected to GPIO 2
+const int ledPin = 2; // GPIO 17 pin connected to the LED
 const int ledPinRed = 4; // GPIO 4 pin connected to the LED
 
 
-// Variable for storing the previous state of the switch
-int previousState = LOW;
 
 AsyncWebServer server(80);
 Preferences preferences;
 String user_password; // Declare user_password globally
+String lashkey; // Declare user_password globally
+String quickcode; // Declare user_password globally
 
 const char *htmlContent = R"(
 <!DOCTYPE html>
@@ -74,14 +74,21 @@ void Deletedata() {
     preferences.remove("wifi_ssid");
     preferences.remove("wifi_password");
     preferences.remove("user_password");
-     Serial.println("Data deleted.");
+   
+    Serial.println("Data deleted.");
+    preferences.remove("lash_key");
+    preferences.remove("Q_code");// remove this line
 }
+
+
+// Variable for storing the previous state of the switch
+//int previousState = LOW;
 
 //blinking led function for pin 4
 void blinkLED(int pin) {
     static unsigned long previousMillis = 0;
     static bool ledState = LOW;
-    const unsigned long interval = 1000; // 1 second interval
+    const unsigned long interval = 500; // 1 second interval
 
     unsigned long currentMillis = millis();
 
@@ -97,6 +104,12 @@ void blinkLED(int pin) {
     }
 
 }
+
+
+//for the momentary switch
+unsigned long pressStartTime = 0;  // Variable to store the time when the button was pressed
+const unsigned long longPressDuration = 4000;  // Duration in milliseconds to consider a press as "long"
+
 
 void setup() {
     Serial.begin(115200);
@@ -115,36 +128,49 @@ void setup() {
     
       // Print saved user password
     user_password = preferences.getString("user_password", "");
-    Serial.print("Saved user password: ");
+    quickcode = preferences.getString("Q_code", "");
+    lashkey = preferences.getString("lash_key", "");
+    Serial.print(lashkey);
+    Serial.print(quickcode);
     Serial.println(user_password);
 
-    // Check if the user password is empty
- user_password = preferences.getString("user_password", "");
-    if (user_password.length() == 0) {
-        // User password is empty, configure ESP32 as an Access Point
-           WiFi.softAP(ap_ssid, ap_password);
-    } else {
-        // User password is not empty, connect to WiFi using saved credentials
-        String saved_ssid = preferences.getString("wifi_ssid", "");
-        String saved_password = preferences.getString("wifi_password", "");
-        WiFi.begin(saved_ssid.c_str(), saved_password.c_str());
+
+  if(lashkey.equals("clicked")){
+    preferences.putString("Q_code", "00"); //insert into Q_code in flash memory 
+    WiFi.softAP(ap_ssid, ap_password);
+      
+
+  }else{
+            // Check if the user password is empty
+        //user_password = preferences.getString("user_password", "");
+            if (user_password.length() == 0) {
+                // User password is empty, configure ESP32 as an Access Point
+                WiFi.softAP(ap_ssid, ap_password);
+            } else {
+                // User password is not empty, connect to WiFi using saved credentials
+                String saved_ssid = preferences.getString("wifi_ssid", "");
+                String saved_password = preferences.getString("wifi_password", "");
+                WiFi.begin(saved_ssid.c_str(), saved_password.c_str());
+                
+                // Wait for WiFi connection
+                int retries = 0;
+                while (WiFi.status() != WL_CONNECTED && retries < 10) {
+                    delay(500);
+                    Serial.print(".");
+                    retries++;
+                }
+                if (WiFi.status() == WL_CONNECTED) {
+            
+                    digitalWrite(ledPinRed, HIGH); // Turn the LED onto indicate wifi connected
+                } else {
+                    WiFi.softAP(ap_ssid, ap_password);
         
-        // Wait for WiFi connection
-        int retries = 0;
-        while (WiFi.status() != WL_CONNECTED && retries < 10) {
-            delay(500);
-            Serial.print(".");
-            retries++;
+                }
+            }
+            
+
         }
-        if (WiFi.status() == WL_CONNECTED) {
-       
-            digitalWrite(ledPinRed, HIGH); // Turn the LED onto indicate wifi connected
-        } else {
-            WiFi.softAP(ap_ssid, ap_password);
-   
-        }
-    }
-    
+  
     // Initialize web server routes
 server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     // Check the User-Agent header to determine if the request is from a browser or your app
@@ -168,59 +194,141 @@ void loop() {
     Serial.println("WiFi SSID: " + preferences.getString("wifi_ssid"));
     Serial.println("WiFi Password: " + preferences.getString("wifi_password"));
     Serial.println("User Password: " + preferences.getString("user_password"));
-*/
+
+
+Serial.println("User Password: " + preferences.getString("user_password"));
+ Serial.print(lashkey);
+    Serial.print(quickcode);
+    delay(2000);
+    */
+ 
+ quickcode = preferences.getString("Q_code", "");
+    lashkey = preferences.getString("lash_key", "");
+     // Print values to serial monitor
+  Serial.print("lashkey: ");
+  Serial.println(lashkey);
+  Serial.print("quickcode: ");
+  Serial.println(quickcode);
     
    
 
     //Deletedata(); //call deleted preference data
-    
-   
+    delay(3000);
 
-    if (user_password.length() == 0) {
-        // User password is empty,
-         
-         // Check if there are any connected stations to the ESP32's access point
-                int stationCount = WiFi.softAPgetStationNum();
 
-                if (stationCount > 0) {
-                    
-                        digitalWrite(ledPin, HIGH); // Turn the LED on
-                } 
-                else {
-                    blinkLED(ledPin);
-                   
-                }
-       
-    } else{
-         if (WiFi.status() == WL_CONNECTED) {
-        //if wifi is coonected 
-         digitalWrite(ledPinRed, HIGH); // Turn the LED on
-
-        }else{
-       blinkLED(ledPinRed);
-       
-        }
+/*
+ if (quickcode.equals("00"))
+    {
+  
+      
+    }else{
+        delay(60000);
+        preferences.putString("Q_code", "");
+        delay(2000);
+        ESP.restart(); //reboot esp 
     }
+
+*/
+    
+
+
+ if (quickcode.equals("00"))
+    {
+         // Check if there are any connected stations to the ESP32's access point
+            int stationCount = WiFi.softAPgetStationNum();
+
+            if (stationCount > 0)
+            {
+
+                digitalWrite(ledPin, HIGH); // Turn the LED on
+            }
+            else
+            {
+                blinkLED(ledPin);
+            }
+
+            delay(60000);
+            preferences.remove("lash_key");
+            preferences.remove("Q_code");
+            WiFi.mode(WIFI_STA);
+
+            delay(300);
+            // Connect to WiFi
+            String ssid = preferences.getString("wifi_ssid", "");
+            String password = preferences.getString("wifi_password", "");
+            Serial.println("Connecting to WiFi...");
+            WiFi.begin(ssid.c_str(), password.c_str());
+
+            digitalWrite(ledPin, LOW); // Turn the LED on
+
+        
+
+}
+
+    if (user_password.length() == 0)
+        {
+
+            // Check if there are any connected stations to the ESP32's access point
+            int stationCount = WiFi.softAPgetStationNum();
+
+            if (stationCount > 0)
+            {
+
+                digitalWrite(ledPin, HIGH); // Turn the LED on
+            }
+            else
+            {
+                blinkLED(ledPin);
+            }
+        }
+        else
+        {
+            if (WiFi.status() == WL_CONNECTED)
+            {
+                //if wifi is coonected 
+                digitalWrite(ledPinRed, HIGH); // Turn the LED on
+
+                }else{
+            blinkLED(ledPinRed);
+            
+                }
+            }
+
+
+
 
 //----momentary switch-------
-     int currentState = digitalRead(switchPin); // Read the current state of the switch
-  // Check if the switch state has changed
-    if (currentState != previousState) {
-        delay(50); // Debounce delay
+   // Read the state of the input pin
+  int buttonState = digitalRead(switchPin);
 
-        // Check if the new state of the switch is pressed (LOW)
-        if (currentState == LOW) {
-            // Toggle the LED state
-                if (WiFi.status() == WL_CONNECTED) {
-                //if wifi is coonected do nothing
-                }else{
-                        // User password is empty, configure ESP32 as an Access Point
-                          WiFi.softAP(ap_ssid, ap_password);
-                        }
-        }
-    previousState = currentState; // Update the previous state for the next iteration
-    delay(100); // Add a small delay for stability
+  // Check if the button is pressed
+  if (buttonState == LOW) {
+    // Record the start time of the press
+    if (pressStartTime == 0) {
+      pressStartTime = millis();
     }
+
+    // Check if the press duration is longer than the defined long press duration
+    if (millis() - pressStartTime >= longPressDuration) {
+    
+      // Turn on the LED
+      digitalWrite(ledPin, HIGH);
+
+       if (WiFi.status() != WL_CONNECTED) {
+                    digitalWrite(ledPin, HIGH);
+                    digitalWrite(ledPinRed, HIGH);
+                    preferences.putString("lash_key", "clicked"); //insert into lash_key in flash memory  
+                    delay(2000);
+                  
+                    //ESP.restart(); //reboot esp                   
+
+                }
+    }
+  } 
+
+    
+
+  
 //__________________________________
 
 
@@ -241,6 +349,16 @@ void handleConnect(AsyncWebServerRequest *request) {
             preferences.putString("wifi_ssid", ssid);
             preferences.putString("wifi_password", password);
             preferences.putString("user_password", user_password);
+
+            /*
+             if(lashkey != "clicked"){
+
+            }else{
+                  preferences.putString("lash_key", "");
+                 
+            }
+            */
+
 
             // Connect to WiFi
             Serial.println("Connecting to WiFi...");
